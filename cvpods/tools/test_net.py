@@ -24,12 +24,14 @@ import re
 import sys
 from collections import OrderedDict
 from pprint import pformat
+
 import megfile
-from loguru import logger
 import torch
+from loguru import logger
 
 from cvpods.checkpoint import DefaultCheckpointer
-from cvpods.engine import RUNNERS, default_argument_parser, default_setup, launch
+from cvpods.engine import (RUNNERS, default_argument_parser, default_setup,
+                           launch)
 from cvpods.evaluation import build_evaluator, verify_results
 from cvpods.modeling import GeneralizedRCNN, GeneralizedRCNNWithTTA, TTAWarper
 from cvpods.utils import comm
@@ -139,7 +141,6 @@ def get_valid_files(args, cfg, logger):
 
 @logger.catch
 def main(args, config, build_model):
-    config.merge_from_list(args.opts)
     cfg = default_setup(config, args)
     if args.num_gpus is None:
         args.num_gpus = torch.cuda.device_count()
@@ -154,7 +155,19 @@ def main(args, config, build_model):
     for current_file in valid_files:
         cfg.MODEL.WEIGHTS = current_file
         model = build_model(cfg)
+        logger.info("Evaluate the Teacher model...")
+        DefaultCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+            cfg.MODEL.WEIGHTS, resume=args.resume, name="ema"
+        )
+        if cfg.TEST.AUG.ENABLED:
+            res = runner_decrator(RUNNERS.get(cfg.TRAINER.NAME)).test_with_TTA(cfg, model)
+        else:
+            res = runner_decrator(RUNNERS.get(cfg.TRAINER.NAME)).test(cfg, model)
 
+        if comm.is_main_process():
+            verify_results(cfg, res)
+
+        logger.info("Evaluate the Student model...")
         DefaultCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
@@ -180,7 +193,8 @@ if __name__ == "__main__":
 
     from config import config  # isort:skip  # noqa: E402
     from net import build_model  # isort:skip  # noqa: E402
-
+    
+    config.merge_from_list(args.opts)
     launch(
         main,
         args.num_gpus,

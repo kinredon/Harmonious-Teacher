@@ -53,6 +53,12 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 pods_train --dir . --dist-url "tcp://127.0.0.1:2900
 * If you want use `wandb`, specify wandb account in `runner.py` and then add `WANDB True` into the command.
 * The model is trained on 4 RTX 3090 GPUs.
 
+## Testing
+```
+CUDA_VISIBLE_DEVICES=0,1,2,3 pods_test --dir . --num-gpus 4 MODEL.WEIGHTS $model_path
+```
+Note that if you provide a relative model path, the `$model_path` is the relative path to `cvpods`. It is recommended to use the absolute path for loading the right model.
+
 ## Acknowledgement
 This repo is developed based on DenseTeacher and cvpods. Please check [DenseTeacher](https://github.com/Megvii-BaseDetection/DenseTeacher) and [cvpods](https://github.com/Megvii-BaseDetection/cvpods) for more details and features.
 

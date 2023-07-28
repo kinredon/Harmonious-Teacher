@@ -8,23 +8,19 @@ import copy
 import os
 import pickle
 from typing import Any, Optional
+
 import megfile
-from loguru import logger
-
 import numpy as np
-
 import torch
 import torch.nn as nn
+from loguru import logger
 
 from cvpods.utils import comm
 from cvpods.utils.compat_wrapper import deprecated
 
 from .c2_model_loading import align_and_update_state_dicts
-from .utils import (
-    _strip_prefix_if_present,
-    get_missing_parameters_message,
-    get_unexpected_parameters_message
-)
+from .utils import (_strip_prefix_if_present, get_missing_parameters_message,
+                    get_unexpected_parameters_message)
 
 
 class Checkpointer(object):
@@ -88,7 +84,7 @@ class Checkpointer(object):
         if tag_checkpoint:
             self.tag_last_checkpoint(basename)
 
-    def load(self, path: str):
+    def load(self, path: str, name='model'):
         """
         Load from the given checkpoint. When path points to network file, this
         function has to be called on all ranks.
@@ -112,7 +108,7 @@ class Checkpointer(object):
         assert megfile.smart_isfile(path), "Checkpoint {} not found!".format(path)
 
         checkpoint = self._load_file(path)
-        self._load_model(checkpoint)
+        self._load_model(checkpoint, name=name)
         if self.resume:
             for key, obj in self.checkpointables.items():
                 if key in checkpoint:
@@ -159,7 +155,7 @@ class Checkpointer(object):
         ]
         return all_model_checkpoints
 
-    def resume_or_load(self, path: str, *, resume: bool = True):
+    def resume_or_load(self, path: str, *, resume: bool = True, name="model"):
         """
         If `resume` is True, this method attempts to resume from the last
         checkpoint, if exists. Otherwise, load checkpoint from the given path.
@@ -174,7 +170,7 @@ class Checkpointer(object):
         """
         if resume and self.has_checkpoint():
             path = self.get_checkpoint_file()
-        return self.load(path)
+        return self.load(path, name=name)
 
     def tag_last_checkpoint(self, last_filename_basename: str):
         """
@@ -200,14 +196,14 @@ class Checkpointer(object):
         """
         return torch.load(f, map_location=torch.device("cpu"))
 
-    def _load_model(self, checkpoint: Any):
+    def _load_model(self, checkpoint: Any, name='model'):
         """
         Load weights from a checkpoint.
 
         Args:
             checkpoint (Any): checkpoint contains the weights.
         """
-        checkpoint_state_dict = checkpoint.pop("model")
+        checkpoint_state_dict = checkpoint.pop(name)
 
         self._convert_ndarray_to_tensor(checkpoint_state_dict)
 
@@ -391,7 +387,7 @@ class DefaultCheckpointer(Checkpointer):
                 loaded = {"model": loaded}
             return loaded
 
-    def _load_model(self, checkpoint):
+    def _load_model(self, checkpoint, name='model'):
         """
         Args:
             checkpoint (dict): model state dict.
@@ -407,7 +403,7 @@ class DefaultCheckpointer(Checkpointer):
             )
             checkpoint["model"] = model_state_dict
         # for non-caffe2 models, use standard ways to load it
-        super()._load_model(checkpoint)
+        super()._load_model(checkpoint, name=name)
 
 
 @deprecated("Use DefaultCheckpointer instead.")
